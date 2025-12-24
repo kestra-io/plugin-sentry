@@ -50,7 +50,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
                 errors:
                   - id: alert_on_failure
-                    type: io.kestra.plugin.notifications.sentry.SentryAlert
+                    type: io.kestra.plugin.sentry.SentryAlert
                     dsn: "{{ secret('SENTRY_DSN') }}" # format: https://xxx@xxx.ingest.sentry.io/xxx
                     endpointType: ENVELOPE"""
         ),
@@ -63,7 +63,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
                 tasks:
                   - id: send_sentry_message
-                    type: io.kestra.plugin.notifications.sentry.SentryAlert
+                    type: io.kestra.plugin.sentry.SentryAlert
                     dsn: "{{ secret('SENTRY_DSN') }}"
                     endpointType: "ENVELOPE"
                     payload: |
@@ -84,7 +84,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
                           }
                       }"""
         ),
-    }
+    },
+    aliases = "io.kestra.plugin.notifications.sentry.SentryAlert"
 )
 public class SentryAlert extends AbstractSentryConnection {
     public static final String SENTRY_VERSION = "7";
