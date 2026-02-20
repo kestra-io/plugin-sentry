@@ -29,8 +29,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Send a Sentry alert when a specific flow or task fails.",
-    description = "Add this task to a list of `errors` tasks to implement custom flow-level failure notifications. \n\n The only required input is a DSN string value, which you can find when you go to your Sentry project settings and go to the section `Client Keys (DSN)`. You can find more detailed description of how to find your DSN in the [following Sentry documentation](https://docs.sentry.io/product/sentry-basics/concepts/dsn-explainer/#where-to-find-your-dsn). \n\n You can customize the alert `payload`, which is a JSON object, or you can skip it and use the default payload created by Kestra. For more information about the payload, check the [Sentry Event Payloads documentation](https://develop.sentry.dev/sdk/event-payloads/). \n\n The `event_id` is an optional payload attribute that you can use to override the default event ID. If you don't specify it (recommended), Kestra will generate a random UUID. You can use this attribute to group events together, but note that this must be a UUID type. For more information, check the [Sentry documentation](https://docs.sentry.io/product/issues/grouping-and-fingerprints/)."
+    title = "Send Sentry alert for failed flow",
+    description = "Use in `errors` tasks to notify Sentry when a flow or task fails. Requires a project DSN (see [Sentry DSN guide](https://docs.sentry.io/product/sentry-basics/concepts/dsn-explainer/#where-to-find-your-dsn)); default payload includes execution metadata and generates an event ID if omitted. Uses ENVELOPE ingest by default (STORE optional) and enforces Sentry limits of 1 MB payload / 100 MB envelope; payload format: [Sentry event payloads](https://develop.sentry.dev/sdk/event-payloads/)."
 )
 @Plugin(
     examples = {
@@ -52,7 +52,11 @@ import static java.nio.charset.StandardCharsets.UTF_8;
                   - id: alert_on_failure
                     type: io.kestra.plugin.sentry.SentryAlert
                     dsn: "{{ secret('SENTRY_DSN') }}" # format: https://xxx@xxx.ingest.sentry.io/xxx
-                    endpointType: ENVELOPE"""
+                    endpointType: STORE   # use STORE if ENVELOPE is not enabled
+                    options:
+                      readTimeout: PT20S
+                      headers:
+                        X-Flow-Name: "{{ flow.id }}" """
         ),
         @Example(
             title = "Send a custom Sentry alert",
@@ -113,21 +117,24 @@ public class SentryAlert extends AbstractSentryConnection {
         }""";
 
     @Schema(
-        title = "Sentry DSN"
+        title = "Sentry DSN",
+        description = "Project DSN used to authenticate requests; keep in secrets and follow Sentry DSN format."
     )
     @PluginProperty(dynamic = true)
     @NotBlank
     protected String dsn;
 
     @Schema(
-        title = "Sentry endpoint type"
+        title = "Sentry ingest endpoint",
+        description = "Defaults to ENVELOPE; switch to STORE if the envelope endpoint is not supported by your Sentry project."
     )
     @PluginProperty(dynamic = true)
     @Builder.Default
     protected EndpointType endpointType = EndpointType.ENVELOPE;
 
     @Schema(
-        title = "Sentry event payload"
+        title = "Sentry event payload",
+        description = "JSON body sent to Sentry; defaults to execution-based template and must stay under Sentry size limits."
     )
     protected Property<String> payload;
 

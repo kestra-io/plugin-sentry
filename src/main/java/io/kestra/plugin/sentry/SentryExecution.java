@@ -19,9 +19,9 @@ import java.util.Map;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Send a Sentry alert with the execution information.",
+    title = "Send Sentry alert with execution data",
     description = """
-    The alert message will include a link to the execution page in the UI along with the execution ID, namespace, flow name, the start date, duration, and the final status of the execution. If failed, then the task that led to the failure is specified.\n\n Use this notification task only in a flow that has a [Flow trigger](https://kestra.io/docs/administrator-guide/monitoring#alerting). Don't use this notification task in `errors` tasks. Instead, for `errors` tasks, use the [SentryAlert](https://kestra.io/plugins/plugin-sentry/io.kestra.plugin.sentry.sentryalert) task. \n\n The only required input is a DSN string value, which you can find when you go to your Sentry project settings and go to the section `Client Keys (DSN)`. For more detailed description of how to find your DSN, visit the [following Sentry documentation](https://docs.sentry.io/product/sentry-basics/concepts/dsn-explainer/#where-to-find-your-dsn).\n\n You can customize the alert `payload`, which is a JSON object. For more information about the payload, check the [Sentry Event Payloads documentation](https://develop.sentry.dev/sdk/event-payloads/). \n\n The `level` parameter is the severity of the issue. The task documentation lists all available options including `DEBUG`, `INFO`, `WARNING`, `ERROR`, `FATAL`. The default value is `ERROR`."""
+    Sends execution metadata (ID, namespace, flow, start time, duration, status, failing task) with a UI link to Sentry. Use in flows triggered by Flow triggers; for `errors` handlers prefer `SentryAlert`. Requires a project DSN (how to find it: [Sentry DSN guide](https://docs.sentry.io/product/sentry-basics/concepts/dsn-explainer/#where-to-find-your-dsn)); level defaults to ERROR and payload remains editable through inherited properties (payload reference: [Sentry event payloads](https://develop.sentry.dev/sdk/event-payloads/))."""
 )
 @Plugin(
     examples = {
@@ -39,6 +39,14 @@ import java.util.Map;
                     dsn: "{{ secret('SENTRY_DSN') }}"
                     level: ERROR
                     executionId: "{{ trigger.executionId }}"
+                    customFields:
+                      shard: "{{ flow.namespace | split('.') | last }}"
+                      retried: "{{ execution.state.current == 'RETRY' }}"
+                    customMessage: "Failure in prod namespace: {{ trigger.executionId }}"
+                    options:
+                      readTimeout: PT15S
+                      headers:
+                        X-Namespace: "{{ flow.namespace }}"
 
                 triggers:
                   - id: failed_prod_workflows
@@ -56,9 +64,23 @@ import java.util.Map;
     aliases = "io.kestra.plugin.notifications.sentry.SentryExecution"
 )
 public class SentryExecution extends SentryTemplate implements ExecutionInterface {
+    @Schema(
+        title = "Execution ID",
+        description = "Defaults to current execution; override to reference another execution."
+    )
     @Builder.Default
     private final Property<String> executionId = Property.ofExpression("{{ execution.id }}");
+
+    @Schema(
+        title = "Custom fields",
+        description = "Extra key/value pairs exposed to the template render map."
+    )
     private Property<Map<String, Object>> customFields;
+
+    @Schema(
+        title = "Custom message",
+        description = "Optional message string injected into the template context."
+    )
     private Property<String> customMessage;
 
     @Override

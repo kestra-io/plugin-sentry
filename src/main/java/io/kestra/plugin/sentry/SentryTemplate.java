@@ -27,18 +27,20 @@ import java.util.UUID;
 public abstract class SentryTemplate extends SentryAlert {
 
     @Schema(
-        title = "Template to use",
+        title = "Template resource path",
         hidden = true
     )
     protected Property<String> templateUri;
 
     @Schema(
-        title = "Map of variables to use for the message template"
+        title = "Template render variables",
+        description = "Key/value map rendered into the template before sending."
     )
     protected Property<Map<String, Object>> templateRenderMap;
 
     @Schema(
-        title = "Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not allowed. It has to be lowercase.",
+        title = "Event identifier",
+        description = "Lowercase uuid4 without dashes; auto-generated when omitted.",
         defaultValue = "a generated unique identifier"
     )
     @Pattern(regexp = "[0-9a-f]{8}[0-9a-f]{4}[0-9a-f]{4}[0-9a-f]{4}[0-9a-f]{12}")
@@ -48,37 +50,41 @@ public abstract class SentryTemplate extends SentryAlert {
     protected String eventId = UUID.randomUUID().toString().toLowerCase().replace("-", "");
 
     @Schema(
-        title = "A string representing the platform the SDK is submitting from. This will be used by the Sentry interface to customize various components."
+        title = "Sentry platform",
+        description = "Defaults to JAVA; Sentry uses it to adapt parsing and UI."
     )
     @NotNull
     @Builder.Default
     protected Property<Platform> platform = Property.ofValue(Platform.JAVA);
 
     @Schema(
-        title = "The record severity",
-        description = "Acceptable values are: `fatal`, `error`, `warning`, `info`, `debug`."
+        title = "Alert severity level",
+        description = "Accepts fatal, error, warning, info, debug; default is ERROR."
     )
     @Builder.Default
     protected Property<ErrorLevel> level = Property.ofValue(ErrorLevel.ERROR);
 
     @Schema(
-        title = "The name of the transaction which caused this alert.",
-        description = "For example, in a web app, this might be the route name"
+        title = "Transaction name",
+        description = "Free-form route or operation name attached to the event."
     )
     protected Property<String> transaction;
 
     @Schema(
-        title = "Identifies the host from which the event was recorded."
+        title = "Server name",
+        description = "Host identifier reported with the event."
     )
     protected Property<String> serverName;
 
     @Schema(
-        title = "An arbitrary mapping of additional metadata to store with the event"
+        title = "Extra metadata",
+        description = "Merged into `extra` payload object after template rendering."
     )
     protected Property<Map<String, Object>> extra;
 
     @Schema(
-        title = "An arbitrary mapping of additional metadata to store with the event"
+        title = "Error details",
+        description = "Optional `errors` payload section; overrides template values."
     )
     protected Property<Map<String, Object>> errors;
 
