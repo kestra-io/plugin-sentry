@@ -27,8 +27,8 @@ import java.util.Map;
 @NoArgsConstructor
 public abstract class AbstractSentryConnection extends Task implements RunnableTask<VoidOutput> {
     @Schema(
-        title = "Options",
-        description = "The options to set to customize the HTTP client"
+        title = "HTTP client options",
+        description = "Tune Sentry request timeouts, charset, headers, and 10 MB response cap; defaults suit most flows."
     )
     @PluginProperty(dynamic = true)
     protected RequestOptions options;
@@ -68,32 +68,50 @@ public abstract class AbstractSentryConnection extends Task implements RunnableT
     @Getter
     @Builder
     public static class RequestOptions {
-        @Schema(title = "The time allowed to establish a connection to the server before failing.")
+        @Schema(
+            title = "Connect timeout",
+            description = "Optional socket connect timeout; if unset, HTTP client default applies."
+        )
         private final Property<Duration> connectTimeout;
 
-        @Schema(title = "The maximum time allowed for reading data from the server before failing.")
+        @Schema(
+            title = "Read timeout",
+            description = "Maximum read duration before failing; defaults to 10s."
+        )
         @Builder.Default
         private final Property<Duration> readTimeout = Property.ofValue(Duration.ofSeconds(10));
 
-        @Schema(title = "The time allowed for a read connection to remain idle before closing it.")
+        @Schema(
+            title = "Read idle timeout",
+            description = "Closes idle read connections after inactivity; defaults to 5 minutes."
+        )
         @Builder.Default
         private final Property<Duration> readIdleTimeout = Property.ofValue(Duration.of(5, ChronoUnit.MINUTES));
 
-        @Schema(title = "The time an idle connection can remain in the client's connection pool before being closed.")
+        @Schema(
+            title = "Connection pool idle timeout",
+            description = "Idle lifetime in the connection pool; defaults to 0s (no idle retention)."
+        )
         @Builder.Default
         private final Property<Duration> connectionPoolIdleTimeout = Property.ofValue(Duration.ofSeconds(0));
 
-        @Schema(title = "The maximum content length of the response.")
+        @Schema(
+            title = "Maximum response size",
+            description = "Upper bound for response content length in bytes; defaults to 10 MB."
+        )
         @Builder.Default
         private final Property<Integer> maxContentLength = Property.ofValue(1024 * 1024 * 10);
 
-        @Schema(title = "The default charset for the request.")
+        @Schema(
+            title = "Default request charset",
+            description = "Charset used for requests when none is specified; defaults to UTF-8."
+        )
         @Builder.Default
         private final Property<Charset> defaultCharset = Property.ofValue(StandardCharsets.UTF_8);
 
         @Schema(
             title = "HTTP headers",
-            description = "HTTP headers to include in the request"
+            description = "Rendered header map applied to the outbound request."
         )
         public Property<Map<String,String>> headers;
     }
