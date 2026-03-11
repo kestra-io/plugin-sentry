@@ -1,15 +1,17 @@
 package io.kestra.plugin.sentry;
 
-import io.kestra.core.junit.annotations.KestraTest;
-import io.kestra.core.repositories.LocalFlowRepositoryLoader;
-import io.kestra.core.runners.TestRunner;
-import jakarta.inject.Inject;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Objects;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import io.kestra.core.junit.annotations.KestraTest;
+import io.kestra.core.repositories.LocalFlowRepositoryLoader;
+import io.kestra.core.runners.TestRunner;
+
+import jakarta.inject.Inject;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -36,7 +38,7 @@ public class SentryExecutionTest extends AbstractSentryTest {
             "sentry"
         );
 
-        String receivedData = waitForWebhookData(() -> FakeWebhookController.data,5000);
+        String receivedData = waitForWebhookData(() -> FakeWebhookController.data, 5000);
 
         assertThat(receivedData, containsString(failedExecution.getId()));
         assertThat(receivedData, containsString("https://mysuperhost.com/kestra/ui"));

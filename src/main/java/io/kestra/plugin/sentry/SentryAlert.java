@@ -1,5 +1,10 @@
 package io.kestra.plugin.sentry;
 
+import java.net.URI;
+import java.time.Instant;
+import java.util.Objects;
+import java.util.UUID;
+
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.HttpResponse;
 import io.kestra.core.http.client.HttpClient;
@@ -10,15 +15,11 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.VoidOutput;
 import io.kestra.core.runners.RunContext;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-
-import java.net.URI;
-import java.time.Instant;
-import java.util.Objects;
-import java.util.UUID;
 
 import static io.kestra.core.utils.Rethrow.throwSupplier;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -98,8 +99,8 @@ public class SentryAlert extends AbstractSentryConnection {
     public static final String SENTRY_FILE_NAME = "application.log";
     public static final String SENTRY_CONTENT_TYPE = "application/json";
     public static final String SENTRY_DSN_REGEXP = "^(https?://[a-f0-9]+@o[0-9]+\\.ingest\\.sentry\\.io/[0-9]+)$";
-    public static final int PAYLOAD_SIZE_THRESHOLD = 1024 * 1024;    // 1MB for events
-    public static final int ENVELOP_SIZE_THRESHOLD = 100 * 1024 * 1024;  // 100MB decompressed
+    public static final int PAYLOAD_SIZE_THRESHOLD = 1024 * 1024; // 1MB for events
+    public static final int ENVELOP_SIZE_THRESHOLD = 100 * 1024 * 1024; // 100MB decompressed
 
     private static final String DEFAULT_PAYLOAD = """
         {
@@ -145,12 +146,12 @@ public class SentryAlert extends AbstractSentryConnection {
         String url = dsn;
         if (dsn.matches(SENTRY_DSN_REGEXP)) {
             /*
-            To make passing the correct API endpoint URL easier,
-            users only need to provide the Sentry DSN, and we parse the required attributes for the URL
-            using the following formats:
-            STORE_URL: https://{HOST}/api/{PROJECT_ID}/store/?sentry_version=7&sentry_client=java&sentry_key={PUBLIC_KEY}
-            ENVELOPE_URL: https://{HOST}/api/{PROJECT_ID}/envelope/?sentry_version=7&sentry_client=java&sentry_key={PUBLIC_KEY}
-            */
+             * To make passing the correct API endpoint URL easier,
+             * users only need to provide the Sentry DSN, and we parse the required attributes for the URL
+             * using the following formats:
+             * STORE_URL: https://{HOST}/api/{PROJECT_ID}/store/?sentry_version=7&sentry_client=java&sentry_key={PUBLIC_KEY}
+             * ENVELOPE_URL: https://{HOST}/api/{PROJECT_ID}/envelope/?sentry_version=7&sentry_client=java&sentry_key={PUBLIC_KEY}
+             */
             url = switch (endpointType) {
                 case ENVELOPE -> EndpointType.ENVELOPE.getEnvelopeUrl(dsn);
                 case STORE -> EndpointType.STORE.getEnvelopeUrl(dsn);
@@ -171,9 +172,11 @@ public class SentryAlert extends AbstractSentryConnection {
                     .addHeader("Content-Type", "application/json")
                     .uri(URI.create(url))
                     .method("POST")
-                    .body(HttpRequest.StringRequestBody.builder()
-                        .content(envelope)
-                        .build());
+                    .body(
+                        HttpRequest.StringRequestBody.builder()
+                            .content(envelope)
+                            .build()
+                    );
 
                 HttpRequest request = requestBuilder.build();
 

@@ -1,5 +1,7 @@
 package io.kestra.plugin.sentry;
 
+import java.util.Map;
+
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
@@ -7,11 +9,10 @@ import io.kestra.core.models.tasks.VoidOutput;
 import io.kestra.core.plugins.notifications.ExecutionInterface;
 import io.kestra.core.plugins.notifications.ExecutionService;
 import io.kestra.core.runners.RunContext;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-
-import java.util.Map;
 
 @SuperBuilder
 @ToString
@@ -21,7 +22,7 @@ import java.util.Map;
 @Schema(
     title = "Send Sentry alert with execution data",
     description = """
-    Sends execution metadata (ID, namespace, flow, start time, duration, status, failing task) with a UI link to Sentry. Use in flows triggered by Flow triggers; for `errors` handlers prefer `SentryAlert`. Requires a project DSN (how to find it: [Sentry DSN guide](https://docs.sentry.io/product/sentry-basics/concepts/dsn-explainer/#where-to-find-your-dsn)); level defaults to ERROR and payload remains editable through inherited properties (payload reference: [Sentry event payloads](https://develop.sentry.dev/sdk/event-payloads/))."""
+        Sends execution metadata (ID, namespace, flow, start time, duration, status, failing task) with a UI link to Sentry. Use in flows triggered by Flow triggers; for `errors` handlers prefer `SentryAlert`. Requires a project DSN (how to find it: [Sentry DSN guide](https://docs.sentry.io/product/sentry-basics/concepts/dsn-explainer/#where-to-find-your-dsn)); level defaults to ERROR and payload remains editable through inherited properties (payload reference: [Sentry event payloads](https://develop.sentry.dev/sdk/event-payloads/))."""
 )
 @Plugin(
     examples = {
