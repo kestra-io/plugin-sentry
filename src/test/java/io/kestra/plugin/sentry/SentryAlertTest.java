@@ -54,7 +54,7 @@ public class SentryAlertTest {
             .dsn(embeddedServer.getURI() + "/webhook-unit-test")
             .endpointType(EndpointType.STORE)
             .payload(
-                new Property<>(
+                Property.ofExpression(
                     Files.asCharSource(
                         new File(
                             Objects.requireNonNull(
@@ -99,7 +99,7 @@ public class SentryAlertTest {
             .dsn(embeddedServer.getURI() + "/webhook-unit-test")
             .endpointType(EndpointType.ENVELOPE)
             .payload(
-                new Property<>(
+                Property.ofExpression(
                     Files.asCharSource(
                         new File(
                             Objects.requireNonNull(
