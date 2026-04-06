@@ -121,7 +121,7 @@ public class SentryAlert extends AbstractSentryConnection {
         title = "Sentry DSN",
         description = "Project DSN used to authenticate requests; keep in secrets and follow Sentry DSN format."
     )
-    @PluginProperty(dynamic = true)
+    @PluginProperty(dynamic = true, group = "main")
     @NotBlank
     protected String dsn;
 
@@ -129,7 +129,7 @@ public class SentryAlert extends AbstractSentryConnection {
         title = "Sentry ingest endpoint",
         description = "Defaults to ENVELOPE; switch to STORE if the envelope endpoint is not supported by your Sentry project."
     )
-    @PluginProperty(dynamic = true)
+    @PluginProperty(dynamic = true, group = "connection")
     @Builder.Default
     protected EndpointType endpointType = EndpointType.ENVELOPE;
 
@@ -137,6 +137,7 @@ public class SentryAlert extends AbstractSentryConnection {
         title = "Sentry event payload",
         description = "JSON body sent to Sentry; defaults to execution-based template and must stay under Sentry size limits."
     )
+    @PluginProperty(group = "main")
     protected Property<String> payload;
 
     @Override
