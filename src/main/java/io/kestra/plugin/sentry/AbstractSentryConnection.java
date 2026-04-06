@@ -31,7 +31,7 @@ public abstract class AbstractSentryConnection extends Task implements RunnableT
         title = "HTTP client options",
         description = "Tune Sentry request timeouts, charset, headers, and 10 MB response cap; defaults suit most flows."
     )
-    @PluginProperty(dynamic = true)
+    @PluginProperty(dynamic = true, group = "advanced")
     protected RequestOptions options;
 
     protected HttpConfiguration httpClientConfigurationWithOptions() throws IllegalVariableEvaluationException {
@@ -75,6 +75,7 @@ public abstract class AbstractSentryConnection extends Task implements RunnableT
             title = "Connect timeout",
             description = "Optional socket connect timeout; if unset, HTTP client default applies."
         )
+        @PluginProperty(group = "execution")
         private final Property<Duration> connectTimeout;
 
         @Schema(
@@ -82,6 +83,7 @@ public abstract class AbstractSentryConnection extends Task implements RunnableT
             description = "Maximum read duration before failing; defaults to 10s."
         )
         @Builder.Default
+        @PluginProperty(group = "execution")
         private final Property<Duration> readTimeout = Property.ofValue(Duration.ofSeconds(10));
 
         @Schema(
@@ -89,6 +91,7 @@ public abstract class AbstractSentryConnection extends Task implements RunnableT
             description = "Closes idle read connections after inactivity; defaults to 5 minutes."
         )
         @Builder.Default
+        @PluginProperty(group = "execution")
         private final Property<Duration> readIdleTimeout = Property.ofValue(Duration.of(5, ChronoUnit.MINUTES));
 
         @Schema(
@@ -96,6 +99,7 @@ public abstract class AbstractSentryConnection extends Task implements RunnableT
             description = "Idle lifetime in the connection pool; defaults to 0s (no idle retention)."
         )
         @Builder.Default
+        @PluginProperty(group = "execution")
         private final Property<Duration> connectionPoolIdleTimeout = Property.ofValue(Duration.ofSeconds(0));
 
         @Schema(
@@ -103,6 +107,7 @@ public abstract class AbstractSentryConnection extends Task implements RunnableT
             description = "Upper bound for response content length in bytes; defaults to 10 MB."
         )
         @Builder.Default
+        @PluginProperty(group = "execution")
         private final Property<Integer> maxContentLength = Property.ofValue(1024 * 1024 * 10);
 
         @Schema(
@@ -110,12 +115,14 @@ public abstract class AbstractSentryConnection extends Task implements RunnableT
             description = "Charset used for requests when none is specified; defaults to UTF-8."
         )
         @Builder.Default
+        @PluginProperty(group = "advanced")
         private final Property<Charset> defaultCharset = Property.ofValue(StandardCharsets.UTF_8);
 
         @Schema(
             title = "HTTP headers",
             description = "Rendered header map applied to the outbound request."
         )
+        @PluginProperty(group = "advanced")
         public Property<Map<String, String>> headers;
     }
 }

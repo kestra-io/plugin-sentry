@@ -13,6 +13,7 @@ import io.kestra.core.runners.RunContext;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import io.kestra.core.models.annotations.PluginProperty;
 
 @SuperBuilder
 @ToString
@@ -70,18 +71,21 @@ public class SentryExecution extends SentryTemplate implements ExecutionInterfac
         description = "Defaults to current execution; override to reference another execution."
     )
     @Builder.Default
+    @PluginProperty(group = "advanced")
     private final Property<String> executionId = Property.ofExpression("{{ execution.id }}");
 
     @Schema(
         title = "Custom fields",
         description = "Extra key/value pairs exposed to the template render map."
     )
+    @PluginProperty(group = "destination")
     private Property<Map<String, Object>> customFields;
 
     @Schema(
         title = "Custom message",
         description = "Optional message string injected into the template context."
     )
+    @PluginProperty(group = "destination")
     private Property<String> customMessage;
 
     @Override

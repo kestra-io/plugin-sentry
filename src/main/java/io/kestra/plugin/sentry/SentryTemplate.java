@@ -32,12 +32,14 @@ public abstract class SentryTemplate extends SentryAlert {
         title = "Template resource path",
         hidden = true
     )
+    @PluginProperty(group = "advanced")
     protected Property<String> templateUri;
 
     @Schema(
         title = "Template render variables",
         description = "Key/value map rendered into the template before sending."
     )
+    @PluginProperty(group = "advanced")
     protected Property<Map<String, Object>> templateRenderMap;
 
     @Schema(
@@ -48,7 +50,7 @@ public abstract class SentryTemplate extends SentryAlert {
     @Pattern(regexp = "[0-9a-f]{8}[0-9a-f]{4}[0-9a-f]{4}[0-9a-f]{4}[0-9a-f]{12}")
     @NotNull
     @Builder.Default
-    @PluginProperty(dynamic = true)
+    @PluginProperty(dynamic = true, group = "main")
     protected String eventId = UUID.randomUUID().toString().toLowerCase().replace("-", "");
 
     @Schema(
@@ -57,6 +59,7 @@ public abstract class SentryTemplate extends SentryAlert {
     )
     @NotNull
     @Builder.Default
+    @PluginProperty(group = "main")
     protected Property<Platform> platform = Property.ofValue(Platform.JAVA);
 
     @Schema(
@@ -64,30 +67,35 @@ public abstract class SentryTemplate extends SentryAlert {
         description = "Accepts fatal, error, warning, info, debug; default is ERROR."
     )
     @Builder.Default
+    @PluginProperty(group = "advanced")
     protected Property<ErrorLevel> level = Property.ofValue(ErrorLevel.ERROR);
 
     @Schema(
         title = "Transaction name",
         description = "Free-form route or operation name attached to the event."
     )
+    @PluginProperty(group = "advanced")
     protected Property<String> transaction;
 
     @Schema(
         title = "Server name",
         description = "Host identifier reported with the event."
     )
+    @PluginProperty(group = "advanced")
     protected Property<String> serverName;
 
     @Schema(
         title = "Extra metadata",
         description = "Merged into `extra` payload object after template rendering."
     )
+    @PluginProperty(group = "advanced")
     protected Property<Map<String, Object>> extra;
 
     @Schema(
         title = "Error details",
         description = "Optional `errors` payload section; overrides template values."
     )
+    @PluginProperty(group = "advanced")
     protected Property<Map<String, Object>> errors;
 
     @SuppressWarnings("unchecked")
