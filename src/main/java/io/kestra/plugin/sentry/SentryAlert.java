@@ -121,7 +121,7 @@ public class SentryAlert extends AbstractSentryConnection {
         title = "Sentry DSN",
         description = "Project DSN used to authenticate requests; keep in secrets and follow Sentry DSN format."
     )
-    @PluginProperty(dynamic = true, group = "main")
+    @PluginProperty(dynamic = true, group = "main", secret = true)
     @NotBlank
     protected String dsn;
 
