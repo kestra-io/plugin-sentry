@@ -122,6 +122,7 @@ public class SentryAlert extends AbstractSentryConnection {
         description = "Project DSN used to authenticate requests; keep in secrets and follow Sentry DSN format."
     )
     @PluginProperty(dynamic = true, group = "main", secret = true)
+    @ToString.Exclude
     @NotBlank
     protected String dsn;
 
@@ -168,7 +169,7 @@ public class SentryAlert extends AbstractSentryConnection {
 
             // Trying to send to /envelope endpoint
             try {
-                runContext.logger().debug("Attempting to send the following Sentry event envelope: {}", envelope);
+                runContext.logger().debug("Attempting to send the following Sentry event envelope: {}", redactDsn(envelope, dsn));
                 HttpRequest.HttpRequestBuilder requestBuilder = createRequestBuilder(runContext)
                     .addHeader("Content-Type", "application/json")
                     .uri(URI.create(url))
@@ -233,6 +234,17 @@ public class SentryAlert extends AbstractSentryConnection {
      */
     private static String getItemHeaders(int payloadLength) {
         return "{\"type\":\"%s\",\"length\":%d,\"content_type\":\"%s\",\"filename\":\"%s\"}".formatted(SENTRY_DATA_MODEL, payloadLength, SENTRY_CONTENT_TYPE, SENTRY_FILE_NAME);
+    }
+
+    /**
+     * Helper method to redact the DSN (which contains the Sentry secret API key) from a string
+     * before it is written to logs. Never log the raw envelope/DSN at any level.
+     */
+    private static String redactDsn(String value, String dsn) {
+        if (value == null || dsn == null || dsn.isEmpty()) {
+            return value;
+        }
+        return value.replace(dsn, "***REDACTED***");
     }
 
     /**
