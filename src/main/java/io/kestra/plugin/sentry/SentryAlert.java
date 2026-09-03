@@ -186,16 +186,21 @@ public class SentryAlert extends AbstractSentryConnection {
 
                 runContext.logger().debug("Response: {}", response.getBody());
 
-                if (response.getStatus().getCode() == 200) {
-                    runContext.logger().info("Request succeeded");
+                int statusCode = response.getStatus().getCode();
+                // The underlying HTTP client only throws on status >= 400; a non-2xx status below
+                // that (e.g. a 3xx redirect Sentry doesn't expect) must still fail the task.
+                if (statusCode < 200 || statusCode >= 300) {
+                    throw new IllegalStateException("Sentry request failed with HTTP status " + statusCode + ": " + response.getBody());
                 }
-            } catch (HttpClientResponseException exception) { // Backward Compatibility cases
+
+                runContext.logger().info("Request succeeded");
+            } catch (HttpClientResponseException exception) {
                 int errorCode = Objects.requireNonNull(exception.getResponse()).getStatus().getCode();
                 if ((errorCode == 401 || errorCode == 404) && endpointType.equals(EndpointType.ENVELOPE)) {
                     // If the /envelope endpoint is Not Found or Unauthorized ("missing authorization information"), request UI to configure endpointType: store to send the request to /store endpoint.
                     runContext.logger().error("Envelope endpoint not supported; Please try to configure the store endpoint instead: endpointType: store");
-                    throw exception;
                 }
+                throw exception;
             }
         }
 
