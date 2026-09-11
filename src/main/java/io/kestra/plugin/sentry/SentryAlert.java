@@ -238,34 +238,39 @@ public class SentryAlert extends AbstractSentryConnection {
     /**
      * Helper method to build the envelope through the Sentry SDK, null whenever it cannot carry the payload as is.
      */
-    private static String sdkEnvelope(String eventId, String payload, String dsn) throws Exception {
+    private static String sdkEnvelope(String eventId, String payload, String dsn) {
         var options = new SentryOptions();
         options.setDsn(dsn);
 
         var serializer = new JsonSerializer(options);
 
-        var event = serializer.deserialize(new StringReader(payload), SentryEvent.class);
-        if (Objects.isNull(event)) {
-            return null;
-        }
-
-        if (Objects.nonNull(eventId)) {
-            try {
-                event.setEventId(new SentryId(eventId));
-            } catch (IllegalArgumentException e) {
-                // Sentry ids are 32 or 36 characters, the hand written header accepted any string
+        try {
+            var event = serializer.deserialize(new StringReader(payload), SentryEvent.class);
+            if (Objects.isNull(event)) {
                 return null;
             }
-        }
 
-        var envelope = SentryEnvelope.from(serializer, event, options.getSdkVersion());
+            if (Objects.nonNull(eventId)) {
+                // Sentry ids are 32 or 36 characters, the hand written header accepted any string
+                event.setEventId(new SentryId(eventId));
+            }
 
-        try (var out = new ByteArrayOutputStream()) {
-            serializer.serialize(envelope, out);
-            var serialized = out.toString(UTF_8);
+            var envelope = SentryEnvelope.from(serializer, event, options.getSdkVersion());
 
-            // the serializer drops an item it cannot write instead of failing, leaving a header with no event
-            return serialized.lines().count() < 2 ? null : serialized;
+            // the serializer drops an item it cannot write instead of failing, so force each one where it is catchable
+            for (var item : envelope.getItems()) {
+                if (item.getData().length == 0) {
+                    return null;
+                }
+            }
+
+            try (var out = new ByteArrayOutputStream()) {
+                serializer.serialize(envelope, out);
+
+                return out.toString(UTF_8);
+            }
+        } catch (Exception e) {
+            return null;
         }
     }
 
