@@ -1,9 +1,17 @@
 package io.kestra.plugin.sentry;
 
+import java.io.ByteArrayOutputStream;
+import java.io.StringReader;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+
+import io.sentry.JsonSerializer;
+import io.sentry.SentryEnvelope;
+import io.sentry.SentryEvent;
+import io.sentry.SentryOptions;
+import io.sentry.protocol.SentryId;
 
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.HttpResponse;
@@ -165,7 +173,7 @@ public class SentryAlert extends AbstractSentryConnection {
                 .orElseGet(throwSupplier(() -> runContext.render(DEFAULT_PAYLOAD.strip())));
 
             // Constructing the envelope payload
-            String envelope = constructEnvelope((String) runContext.getVariables().get("eventId"), payload);
+            String envelope = constructEnvelope((String) runContext.getVariables().get("eventId"), payload, dsn);
 
             // Trying to send to /envelope endpoint
             try {
@@ -209,12 +217,18 @@ public class SentryAlert extends AbstractSentryConnection {
 
     /**
      * Helper method to construct the Envelope formatted payload.
+     *
+     * The envelope and item headers now come from the SDK's own serializer rather than hand written JSON, so the
+     * wire format tracks Sentry instead of this file.
      */
-    private String constructEnvelope(String eventId, String payload) {
+    private String constructEnvelope(String eventId, String payload, String dsn) throws Exception {
         return switch (endpointType) {
             case ENVELOPE -> {
-                // Build Envelope Payload
-                String envelope = "%s%n%s%n%s%n".formatted(getEnvelopeHeaders(eventId, dsn), getItemHeaders(payload.length()), payload);
+                String sdkBuilt = sdkEnvelope(eventId, payload, dsn);
+
+                // the SDK's event model is narrower than Sentry's ingest, a bare string "message" being the common
+                // case, so a payload it cannot read still ships through the envelope this task built before
+                String envelope = Objects.isNull(sdkBuilt) ? legacyEnvelope(eventId, payload, dsn) : sdkBuilt;
 
                 // Check envelope and payload against threshold sizes
                 checkEnvelopeAndPayloadThresholds(envelope, payload);
@@ -223,6 +237,40 @@ public class SentryAlert extends AbstractSentryConnection {
             }
             case STORE -> payload;
         };
+    }
+
+    /**
+     * Helper method to build the envelope through the Sentry SDK, null when the payload is not a readable event.
+     */
+    private String sdkEnvelope(String eventId, String payload, String dsn) throws Exception {
+        SentryOptions options = new SentryOptions();
+        options.setDsn(dsn);
+
+        JsonSerializer serializer = new JsonSerializer(options);
+
+        SentryEvent event = serializer.deserialize(new StringReader(payload), SentryEvent.class);
+        if (Objects.isNull(event)) {
+            return null;
+        }
+
+        if (Objects.nonNull(eventId)) {
+            event.setEventId(new SentryId(eventId));
+        }
+
+        SentryEnvelope envelope = SentryEnvelope.from(serializer, event, options.getSdkVersion());
+
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            serializer.serialize(envelope, out);
+
+            return out.toString(UTF_8);
+        }
+    }
+
+    /**
+     * Helper method to build the envelope by hand, for payloads the SDK cannot model.
+     */
+    private static String legacyEnvelope(String eventId, String payload, String dsn) {
+        return "%s%n%s%n%s%n".formatted(getEnvelopeHeaders(eventId, dsn), getItemHeaders(payload.length()), payload);
     }
 
     /**
