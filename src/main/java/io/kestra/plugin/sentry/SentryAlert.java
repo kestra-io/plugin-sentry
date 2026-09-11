@@ -216,19 +216,15 @@ public class SentryAlert extends AbstractSentryConnection {
     }
 
     /**
-     * Helper method to construct the Envelope formatted payload.
-     *
-     * The envelope and item headers now come from the SDK's own serializer rather than hand written JSON, so the
-     * wire format tracks Sentry instead of this file.
+     * Helper method to construct the Envelope formatted payload, headers now coming from the SDK's serializer.
      */
     private String constructEnvelope(String eventId, String payload, String dsn) throws Exception {
         return switch (endpointType) {
             case ENVELOPE -> {
-                String sdkBuilt = sdkEnvelope(eventId, payload, dsn);
+                var sdkBuilt = sdkEnvelope(eventId, payload, dsn);
 
-                // the SDK's event model is narrower than Sentry's ingest, a bare string "message" being the common
-                // case, so a payload it cannot read still ships through the envelope this task built before
-                String envelope = Objects.isNull(sdkBuilt) ? legacyEnvelope(eventId, payload, dsn) : sdkBuilt;
+                // the SDK models a narrower event than Sentry's ingest accepts, so what it rejects still ships as before
+                var envelope = Objects.isNull(sdkBuilt) ? legacyEnvelope(eventId, payload, dsn) : sdkBuilt;
 
                 // Check envelope and payload against threshold sizes
                 checkEnvelopeAndPayloadThresholds(envelope, payload);
@@ -240,29 +236,36 @@ public class SentryAlert extends AbstractSentryConnection {
     }
 
     /**
-     * Helper method to build the envelope through the Sentry SDK, null when the payload is not a readable event.
+     * Helper method to build the envelope through the Sentry SDK, null whenever it cannot carry the payload as is.
      */
-    private String sdkEnvelope(String eventId, String payload, String dsn) throws Exception {
-        SentryOptions options = new SentryOptions();
+    private static String sdkEnvelope(String eventId, String payload, String dsn) throws Exception {
+        var options = new SentryOptions();
         options.setDsn(dsn);
 
-        JsonSerializer serializer = new JsonSerializer(options);
+        var serializer = new JsonSerializer(options);
 
-        SentryEvent event = serializer.deserialize(new StringReader(payload), SentryEvent.class);
+        var event = serializer.deserialize(new StringReader(payload), SentryEvent.class);
         if (Objects.isNull(event)) {
             return null;
         }
 
         if (Objects.nonNull(eventId)) {
-            event.setEventId(new SentryId(eventId));
+            try {
+                event.setEventId(new SentryId(eventId));
+            } catch (IllegalArgumentException e) {
+                // Sentry ids are 32 or 36 characters, the hand written header accepted any string
+                return null;
+            }
         }
 
-        SentryEnvelope envelope = SentryEnvelope.from(serializer, event, options.getSdkVersion());
+        var envelope = SentryEnvelope.from(serializer, event, options.getSdkVersion());
 
-        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+        try (var out = new ByteArrayOutputStream()) {
             serializer.serialize(envelope, out);
+            var serialized = out.toString(UTF_8);
 
-            return out.toString(UTF_8);
+            // the serializer drops an item it cannot write instead of failing, leaving a header with no event
+            return serialized.lines().count() < 2 ? null : serialized;
         }
     }
 

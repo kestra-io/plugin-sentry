@@ -31,6 +31,10 @@ class SentryEnvelopeSourceTest {
     private RunContextFactory runContextFactory;
 
     private String send(String payload) throws Exception {
+        return send(payload, Map.of());
+    }
+
+    private String send(String payload, Map<String, Object> variables) throws Exception {
         EmbeddedServer server = applicationContext.getBean(EmbeddedServer.class);
         server.start();
 
@@ -41,7 +45,7 @@ class SentryEnvelopeSourceTest {
             .endpointType(EndpointType.ENVELOPE)
             .payload(Property.ofValue(payload))
             .build()
-            .run(runContextFactory.of(Map.of()));
+            .run(runContextFactory.of(variables));
 
         return FakeWebhookController.data;
     }
@@ -68,5 +72,26 @@ class SentryEnvelopeSourceTest {
         assertThat(body, containsString("just a string"));
         assertThat(body, containsString("\"name\":\"java\""));
         assertThat(body, containsString("application.log"));
+    }
+
+    @Test
+    @DisplayName("A well formed eventId is carried by the SDK envelope")
+    void sdkEnvelopeCarriesAWellFormedEventId() throws Exception {
+        var eventId = "fc6d8c0c43fc4630ad850ee518f1b9d0";
+
+        var body = send("{\"message\":{\"message\":\"hi\"}}", Map.of("eventId", eventId));
+
+        assertThat(body, containsString(eventId));
+        assertThat(body, containsString("sentry.java"));
+    }
+
+    @Test
+    @DisplayName("An eventId the SDK rejects falls back rather than failing the task")
+    void malformedEventIdFallsBackInsteadOfThrowing() throws Exception {
+        // Sentry ids must be 32 or 36 characters, the hand written header accepted any string
+        var body = send("{\"message\":{\"message\":\"hi\"}}", Map.of("eventId", "not-a-valid-sentry-id"));
+
+        assertThat(body, containsString("not-a-valid-sentry-id"));
+        assertThat(body, containsString("\"name\":\"java\""));
     }
 }
