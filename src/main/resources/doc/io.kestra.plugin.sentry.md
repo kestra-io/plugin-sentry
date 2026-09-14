@@ -11,3 +11,16 @@ Set `dsn` to your Sentry project's DSN (found in Settings → Projects → Clien
 `SentryAlert` sends an event to Sentry as a step within a flow — set `payload` to a JSON body in the Sentry event format, or omit it to send a default alert. Set `endpointType` to `ENVELOPE` (the default) or `STORE` to match your Sentry SDK configuration.
 
 `SentryExecution` sends a structured execution summary including status, duration, and an execution link, and is designed for use with a [Flow trigger](https://kestra.io/docs/workflow-components/triggers) in a dedicated monitoring namespace that watches other namespaces for failures.
+
+## Envelope framing
+
+On `ENVELOPE`, the event body is framed by the Sentry SDK when your `payload` parses as a Sentry event, and by the plugin's own framing when it does not. A bare string `message` is the common case the SDK will not model, since it expects an object.
+
+The two differ on the wire, which matters when reading a request capture or a proxy log:
+
+| | SDK framing | plugin framing |
+| --- | --- | --- |
+| `sdk.name` in the envelope header | `sentry.java` | `java` |
+| DSN in the envelope header | absent | present |
+
+Either way the event reaches Sentry identically. `STORE` posts the payload unframed and is unaffected.
