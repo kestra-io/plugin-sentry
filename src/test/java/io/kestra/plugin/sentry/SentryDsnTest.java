@@ -1,5 +1,7 @@
 package io.kestra.plugin.sentry;
 
+import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -213,15 +215,37 @@ class SentryDsnTest {
         for (var dsn : invalidDsns) {
             var exception = assertThrows(IllegalArgumentException.class, () -> EndpointType.ENVELOPE.getEnvelopeUrl(dsn), dsn);
             assertThat(dsn, exception.getMessage(), startsWith("Invalid Sentry DSN"));
-
-            exception = assertThrows(IllegalArgumentException.class, () -> EndpointType.withoutSecretKey(dsn), dsn);
-            assertThat(dsn, exception.getMessage(), startsWith("Invalid Sentry DSN"));
         }
     }
 
     @Test
-    @DisplayName("The DEBUG envelope log redacts the DSN without its secret key")
-    void debugLogRedactsTheDsnWithoutTheSecretKey() throws Exception {
+    @DisplayName("The DSN put in the envelope keeps the host, port and path prefix, without the secret key")
+    void dsnWithoutSecretKey() {
+        assertThat(
+            EndpointType.parse("HTTPS://" + PUBLIC_KEY + ":" + SECRET_KEY + "@sentry.example.com:9000//sentry/42/").withoutSecretKey(),
+            is("https://" + PUBLIC_KEY + "@sentry.example.com:9000/sentry/42")
+        );
+        assertThat(
+            EndpointType.parse("http://" + PUBLIC_KEY + ":" + SECRET_KEY + "@[::1]:9000/42").withoutSecretKey(),
+            is("http://" + PUBLIC_KEY + "@[::1]:9000/42")
+        );
+    }
+
+    @Test
+    @DisplayName("An empty DSN fails with a message that says what to fix")
+    void emptyDsn() {
+        var runContext = runContextFactory.of(Map.of("emptySecret", ""));
+
+        for (var dsn : new String[] { "   ", "{{ emptySecret }}" }) {
+            var exception = assertThrows(IllegalArgumentException.class, () -> send(dsn, "{}", runContext), dsn);
+
+            assertThat(dsn, exception.getMessage(), startsWith("Sentry DSN is empty"));
+        }
+    }
+
+    @Test
+    @DisplayName("The DEBUG log carries neither the keys nor the payload")
+    void debugLogCarriesNeitherKeysNorPayload() throws Exception {
         var runContext = runContextFactory.of();
         var logger = (Logger) runContext.logger();
         var appender = new ListAppender<ILoggingEvent>();
@@ -241,14 +265,16 @@ class SentryDsnTest {
             logger.setLevel(previousLevel);
         }
 
-        var envelopeLogs = appender.list.stream()
-            .map(ILoggingEvent::getFormattedMessage)
-            .filter(message -> message.startsWith("Attempting to send"))
-            .toList();
+        var logs = appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+        var envelopeLogs = logs.stream().filter(message -> message.startsWith("Attempting to send the Sentry event")).toList();
         assertThat(envelopeLogs.size(), is(2));
-        assertThat(envelopeLogs.getFirst(), containsString("***REDACTED***"));
         for (var log : envelopeLogs) {
             assertThat(log, not(containsString(PUBLIC_KEY)));
+            assertThat(log, not(containsString("just a string")));
+            assertThat(log, not(containsString("Execution failed")));
+        }
+        // the HTTP client logs the ingest URL, which carries the public key as the protocol requires
+        for (var log : logs) {
             assertThat(log, not(containsString(SECRET_KEY)));
         }
     }
