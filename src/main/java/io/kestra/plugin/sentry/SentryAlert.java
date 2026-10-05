@@ -14,7 +14,6 @@ import io.sentry.SentryOptions;
 import io.sentry.protocol.SentryId;
 
 import io.kestra.core.http.HttpRequest;
-import io.kestra.core.http.HttpResponse;
 import io.kestra.core.http.client.HttpClient;
 import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.models.annotations.Example;
@@ -60,7 +59,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
                 errors:
                   - id: alert_on_failure
                     type: io.kestra.plugin.sentry.SentryAlert
-                    dsn: "{{ secret('SENTRY_DSN') }}" # format: https://xxx@xxx.ingest.sentry.io/xxx
+                    dsn: "{{ secret('SENTRY_DSN') }}" # format: https://{PUBLIC_KEY}@{HOST}/{PROJECT_ID}
                     endpointType: STORE   # use STORE if ENVELOPE is not enabled
                     options:
                       readTimeout: PT20S
@@ -106,6 +105,7 @@ public class SentryAlert extends AbstractSentryConnection {
     public static final String SENTRY_DATA_MODEL = "event";
     public static final String SENTRY_FILE_NAME = "application.log";
     public static final String SENTRY_CONTENT_TYPE = "application/json";
+    @Deprecated(forRemoval = true, since = "1.3.3")
     public static final String SENTRY_DSN_REGEXP = "^(https?://[a-f0-9]+@o[0-9]+\\.ingest\\.sentry\\.io/[0-9]+)$";
     public static final int PAYLOAD_SIZE_THRESHOLD = 1024 * 1024; // 1MB for events
     public static final int ENVELOP_SIZE_THRESHOLD = 100 * 1024 * 1024; // 100MB decompressed
@@ -127,7 +127,12 @@ public class SentryAlert extends AbstractSentryConnection {
 
     @Schema(
         title = "Sentry DSN",
-        description = "Project DSN used to authenticate requests; keep in secrets and follow Sentry DSN format."
+        description = """
+            Project DSN used to authenticate requests, in the Sentry DSN format
+            `{PROTOCOL}://{PUBLIC_KEY}[:{SECRET_KEY}]@{HOST}{PATH}/{PROJECT_ID}`, from sentry.io or a self-hosted Sentry;
+            the ingest URL is derived from it and the secret key is never sent.
+            A value without a public key is used as the ingest URL as is. Keep it in secrets.
+            """
     )
     @PluginProperty(dynamic = true, group = "main", secret = true)
     @ToString.Exclude
@@ -151,10 +156,15 @@ public class SentryAlert extends AbstractSentryConnection {
 
     @Override
     public VoidOutput run(RunContext runContext) throws Exception {
-        String dsn = runContext.render(this.dsn);
+        var rendered = runContext.render(this.dsn);
+        if (rendered == null || rendered.isBlank()) {
+            throw new IllegalArgumentException("Sentry DSN is empty: set `dsn` to the project DSN, and if it comes from a secret, check that the secret has a value.");
+        }
+        var dsn = rendered.trim();
 
-        String url = dsn;
-        if (dsn.matches(SENTRY_DSN_REGEXP)) {
+        var url = dsn;
+        var envelopeDsn = dsn;
+        if (EndpointType.isDsn(dsn)) {
             /*
              * To make passing the correct API endpoint URL easier,
              * users only need to provide the Sentry DSN, and we parse the required attributes for the URL
@@ -162,23 +172,22 @@ public class SentryAlert extends AbstractSentryConnection {
              * STORE_URL: https://{HOST}/api/{PROJECT_ID}/store/?sentry_version=7&sentry_client=java&sentry_key={PUBLIC_KEY}
              * ENVELOPE_URL: https://{HOST}/api/{PROJECT_ID}/envelope/?sentry_version=7&sentry_client=java&sentry_key={PUBLIC_KEY}
              */
-            url = switch (endpointType) {
-                case ENVELOPE -> EndpointType.ENVELOPE.getEnvelopeUrl(dsn);
-                case STORE -> EndpointType.STORE.getEnvelopeUrl(dsn);
-            };
+            var parsed = EndpointType.parse(dsn);
+            url = parsed.ingestUrl(endpointType);
+            envelopeDsn = parsed.withoutSecretKey();
         }
 
-        try (HttpClient client = new HttpClient(runContext, super.httpClientConfigurationWithOptions())) {
-            String payload = runContext.render(this.payload).as(String.class)
+        try (var client = new HttpClient(runContext, super.httpClientConfigurationWithOptions())) {
+            var payload = runContext.render(this.payload).as(String.class)
                 .orElseGet(throwSupplier(() -> runContext.render(DEFAULT_PAYLOAD.strip())));
 
             // Constructing the envelope payload
-            String envelope = constructEnvelope((String) runContext.getVariables().get("eventId"), payload, dsn);
+            var envelope = constructEnvelope((String) runContext.getVariables().get("eventId"), payload, envelopeDsn);
 
             // Trying to send to /envelope endpoint
             try {
-                runContext.logger().debug("Attempting to send the following Sentry event envelope: {}", redactDsn(envelope, dsn));
-                HttpRequest.HttpRequestBuilder requestBuilder = createRequestBuilder(runContext)
+                runContext.logger().debug("Attempting to send the Sentry event to the {} endpoint", endpointType);
+                var requestBuilder = createRequestBuilder(runContext)
                     .addHeader("Content-Type", "application/json")
                     .uri(URI.create(url))
                     .method("POST")
@@ -188,13 +197,13 @@ public class SentryAlert extends AbstractSentryConnection {
                             .build()
                     );
 
-                HttpRequest request = requestBuilder.build();
+                var request = requestBuilder.build();
 
-                HttpResponse<String> response = client.request(request, String.class);
+                var response = client.request(request, String.class);
 
                 runContext.logger().debug("Response: {}", response.getBody());
 
-                int statusCode = response.getStatus().getCode();
+                var statusCode = response.getStatus().getCode();
                 // The underlying HTTP client only throws on status >= 400; a non-2xx status below
                 // that (e.g. a 3xx redirect Sentry doesn't expect) must still fail the task.
                 if (statusCode < 200 || statusCode >= 300) {
@@ -203,7 +212,7 @@ public class SentryAlert extends AbstractSentryConnection {
 
                 runContext.logger().info("Request succeeded");
             } catch (HttpClientResponseException exception) {
-                int errorCode = Objects.requireNonNull(exception.getResponse()).getStatus().getCode();
+                var errorCode = Objects.requireNonNull(exception.getResponse()).getStatus().getCode();
                 if ((errorCode == 401 || errorCode == 404) && endpointType.equals(EndpointType.ENVELOPE)) {
                     // If the /envelope endpoint is Not Found or Unauthorized ("missing authorization information"), request UI to configure endpointType: store to send the request to /store endpoint.
                     runContext.logger().error("Envelope endpoint not supported; Please try to configure the store endpoint instead: endpointType: store");
@@ -221,7 +230,7 @@ public class SentryAlert extends AbstractSentryConnection {
     private String constructEnvelope(String eventId, String payload, String dsn) throws Exception {
         return switch (endpointType) {
             case ENVELOPE -> {
-                var sdkBuilt = sdkEnvelope(eventId, payload, dsn);
+                var sdkBuilt = sdkEnvelope(eventId, payload);
 
                 // the SDK models a narrower event than Sentry's ingest accepts, so what it rejects still ships as before
                 var envelope = Objects.isNull(sdkBuilt) ? legacyEnvelope(eventId, payload, dsn) : sdkBuilt;
@@ -238,10 +247,8 @@ public class SentryAlert extends AbstractSentryConnection {
     /**
      * Helper method to build the envelope through the Sentry SDK, null whenever it cannot carry the payload as is.
      */
-    private static String sdkEnvelope(String eventId, String payload, String dsn) {
+    private static String sdkEnvelope(String eventId, String payload) {
         var options = new SentryOptions();
-        options.setDsn(dsn);
-
         var serializer = new JsonSerializer(options);
 
         try {
@@ -295,17 +302,6 @@ public class SentryAlert extends AbstractSentryConnection {
      */
     private static String getItemHeaders(int payloadLength) {
         return "{\"type\":\"%s\",\"length\":%d,\"content_type\":\"%s\",\"filename\":\"%s\"}".formatted(SENTRY_DATA_MODEL, payloadLength, SENTRY_CONTENT_TYPE, SENTRY_FILE_NAME);
-    }
-
-    /**
-     * Helper method to redact the DSN (which contains the Sentry secret API key) from a string
-     * before it is written to logs. Never log the raw envelope/DSN at any level.
-     */
-    private static String redactDsn(String value, String dsn) {
-        if (value == null || dsn == null || dsn.isEmpty()) {
-            return value;
-        }
-        return value.replace(dsn, "***REDACTED***");
     }
 
     /**
