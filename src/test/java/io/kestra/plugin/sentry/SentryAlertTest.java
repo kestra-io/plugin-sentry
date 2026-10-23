@@ -176,7 +176,6 @@ public class SentryAlertTest {
     @Test
     @DisplayName("Flow setting the deprecated HTTP options still validates and runs")
     void flowSettingDeprecatedOptionsStillValidatesAndRuns() throws Exception {
-        // Flows written before the deprecation still set these options: they must keep parsing, validating and running.
         var message = "deprecated-options-" + IdUtils.create();
         var embeddedServer = applicationContext.getBean(EmbeddedServer.class);
         embeddedServer.start();
