@@ -2,6 +2,7 @@ package io.kestra.plugin.sentry;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -12,21 +13,25 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.io.Files;
 
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.junit.annotations.KestraTest;
+import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.validations.ModelValidator;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.serializers.YamlParser;
 import io.kestra.core.utils.IdUtils;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.runtime.server.EmbeddedServer;
 import jakarta.inject.Inject;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -39,6 +44,9 @@ public class SentryAlertTest {
 
     @Inject
     private RunContextFactory runContextFactory;
+
+    @Inject
+    private ModelValidator modelValidator;
 
     @Test
     @DisplayName("Run with deprecated /store endpoint")
@@ -162,6 +170,46 @@ public class SentryAlertTest {
         } finally {
             logbackLogger.detachAppender(appender);
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    @DisplayName("Flow setting the deprecated HTTP options still validates and runs")
+    void flowSettingDeprecatedOptionsStillValidatesAndRuns() throws Exception {
+        var message = "deprecated-options-" + IdUtils.create();
+        var embeddedServer = applicationContext.getBean(EmbeddedServer.class);
+        embeddedServer.start();
+
+        var flow = YamlParser.parse(
+            """
+                id: sentry_deprecated_options
+                namespace: io.kestra.tests
+                tasks:
+                  - id: alert
+                    type: io.kestra.plugin.sentry.SentryAlert
+                    dsn: "%s/webhook-unit-test"
+                    endpointType: STORE
+                    payload: '{"level": "error", "message": {"message": "%s"}}'
+                    options:
+                      readTimeout: PT30S
+                      connectionPoolIdleTimeout: PT10S
+                      maxContentLength: 1024
+                """.formatted(embeddedServer.getURI(), message),
+            Flow.class
+        );
+
+        assertThat(modelValidator.isValid(flow).isEmpty(), is(true));
+
+        var runContext = runContextFactory.of(Map.of());
+        var task = (SentryAlert) flow.getTasks().getFirst();
+        var options = task.getOptions();
+        assertThat(runContext.render(options.getReadTimeout()).as(Duration.class).orElseThrow(), is(Duration.ofSeconds(30)));
+        assertThat(runContext.render(options.getConnectionPoolIdleTimeout()).as(Duration.class).orElseThrow(), is(Duration.ofSeconds(10)));
+        assertThat(runContext.render(options.getMaxContentLength()).as(Integer.class).orElseThrow(), is(1024));
+
+        task.run(runContext);
+
+        assertThat(FakeWebhookController.data, containsString(message));
     }
 
     private void runAgainstErrorEndpoint(int status) throws Exception {
