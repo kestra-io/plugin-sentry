@@ -7,12 +7,6 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
-import io.sentry.JsonSerializer;
-import io.sentry.SentryEnvelope;
-import io.sentry.SentryEvent;
-import io.sentry.SentryOptions;
-import io.sentry.protocol.SentryId;
-
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.client.HttpClient;
 import io.kestra.core.http.client.HttpClientResponseException;
@@ -23,6 +17,11 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.VoidOutput;
 import io.kestra.core.runners.RunContext;
 
+import io.sentry.JsonSerializer;
+import io.sentry.SentryEnvelope;
+import io.sentry.SentryEvent;
+import io.sentry.SentryOptions;
+import io.sentry.protocol.SentryId;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
@@ -62,7 +61,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
                     dsn: "{{ secret('SENTRY_DSN') }}" # format: https://{PUBLIC_KEY}@{HOST}/{PROJECT_ID}
                     endpointType: STORE   # use STORE if ENVELOPE is not enabled
                     options:
-                      readTimeout: PT20S
+                      readIdleTimeout: PT20S
                       headers:
                         X-Flow-Name: "{{ flow.id }}" """
         ),
